@@ -1,0 +1,17 @@
+.DS_Store
+.venv/
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+
+# Source downloads and disposable build reports stay local.
+data/raw/
+data/processed/
+
+# Generated browser assets are tracked only after validation.
+public/data/displacement/**/*.tmp
+
