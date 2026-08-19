@@ -412,7 +412,12 @@ export function DisplacementGlobe({
 
   return (
     <div className="globe-shell">
-      <div ref={frameRef} className="globe-canvas" aria-label="Interactive globe of forced displacement" />
+      <div
+        ref={frameRef}
+        className="globe-canvas"
+        aria-label="Interactive globe of forced displacement"
+        onPointerDownCapture={() => registerInteractionRef.current()}
+      />
       {tooltip && (
         <div className="country-tooltip" style={{ transform: `translate(${tooltip.x + 12}px, ${tooltip.y + 12}px)` }}>
           <strong>{tooltip.name}</strong><span>Click to focus</span>
