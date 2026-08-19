@@ -76,4 +76,4 @@ Map tiles: [OpenFreeMap](https://openfreemap.org/) using OpenMapTiles and OpenSt
 
 The raw UNHCR and World Bank downloads remain local-only. Compact browser assets under `public/data/displacement/` are tracked so the static site can build without source archives.
 
-Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `displacement-globe`.
+Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `displacement-globe`. The workflow idempotently provisions the project and `displacementglobe.lucasspeciale.com` custom domain when needed.
