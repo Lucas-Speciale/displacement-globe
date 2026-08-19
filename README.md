@@ -2,7 +2,7 @@
 
 Displacement Globe is a dark, time-first exploration of how forced-displacement relationships changed from 2000 through 2025. Rotate the globe, play or scrub the annual timeline, switch between hosted refugees, new asylum claims, returns, and resettlement, then select a country to isolate inbound or outbound corridors.
 
-This is an early local prototype. The product and architecture brief is in [PROJECT_PLAN.md](PROJECT_PLAN.md).
+The project is published at [displacementglobe.lucasspeciale.com](https://displacementglobe.lucasspeciale.com). The product and architecture brief is in [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ## Local development
 
@@ -72,3 +72,8 @@ Primary source: [UNHCR Refugee Population Statistics Database](https://www.unhcr
 
 Map tiles: [OpenFreeMap](https://openfreemap.org/) using OpenMapTiles and OpenStreetMap data. Country geometry: World Bank Official Boundaries, normalized through the existing project data pipeline.
 
+## Deployment
+
+The raw UNHCR and World Bank downloads remain local-only. Compact browser assets under `public/data/displacement/` are tracked so the static site can build without source archives.
+
+Pushes to `main` run tests, lint, and the production build before deploying the Cloudflare Pages project `displacement-globe`.
