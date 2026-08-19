@@ -94,6 +94,7 @@ export function DisplacementExplorer() {
   const [labelDensity, setLabelDensity] = useState<MapLabelDensity>("essential");
   const [selectedRoute, setSelectedRoute] = useState<RouteView | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [guideAttention, setGuideAttention] = useState(false);
   const [titlePulseSeen, setTitlePulseSeen] = useState(false);
   const [titlePulseActive, setTitlePulseActive] = useState(false);
   const cacheRef = useRef(new Map<string, Promise<YearModeData>>());
@@ -254,6 +255,7 @@ export function DisplacementExplorer() {
       setTitlePulseActive(true);
     }
     setGuideOpen(false);
+    setGuideAttention(true);
   };
 
   return (
@@ -299,6 +301,7 @@ export function DisplacementExplorer() {
         direction={direction}
         labelDensity={labelDensity}
         hasSelection={selectedCountry !== null}
+        guideAttention={guideAttention}
         onModeChange={(nextMode) => {
           setPlaying(false);
           setMode(nextMode);
@@ -315,7 +318,11 @@ export function DisplacementExplorer() {
           setSelectedRoute(null);
         }}
         onLabelDensityChange={setLabelDensity}
-        onOpenGuide={() => setGuideOpen(true)}
+        onGuideAttentionEnd={() => setGuideAttention(false)}
+        onOpenGuide={() => {
+          setGuideAttention(false);
+          setGuideOpen(true);
+        }}
       />
 
       {selectedMeta && (

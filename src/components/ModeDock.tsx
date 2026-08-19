@@ -12,9 +12,11 @@ interface ModeDockProps {
   direction: FocusDirection;
   labelDensity: MapLabelDensity;
   hasSelection: boolean;
+  guideAttention: boolean;
   onModeChange: (mode: DataMode) => void;
   onDirectionChange: (direction: FocusDirection) => void;
   onLabelDensityChange: (density: MapLabelDensity) => void;
+  onGuideAttentionEnd: () => void;
   onOpenGuide: () => void;
 }
 
@@ -23,9 +25,11 @@ export function ModeDock({
   direction,
   labelDensity,
   hasSelection,
+  guideAttention,
   onModeChange,
   onDirectionChange,
   onLabelDensityChange,
+  onGuideAttentionEnd,
   onOpenGuide,
 }: ModeDockProps) {
   return (
@@ -64,7 +68,15 @@ export function ModeDock({
             </button>
           </div>
         )}
-        <button type="button" className="guide-button" onClick={onOpenGuide} aria-label="Open guide">
+        <button
+          type="button"
+          className={`guide-button ${guideAttention ? "attention" : ""}`}
+          onAnimationEnd={(event) => {
+            if (event.animationName === "guide-attention") onGuideAttentionEnd();
+          }}
+          onClick={onOpenGuide}
+          aria-label="Open guide"
+        >
           <span aria-hidden="true">i</span>
           Guide
         </button>
