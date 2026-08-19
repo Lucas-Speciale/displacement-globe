@@ -1,6 +1,8 @@
 const PROJECT_NAME = "displacement-globe";
 const PRODUCTION_BRANCH = "main";
 const CUSTOM_DOMAIN = "displacementglobe.lucasspeciale.com";
+const DNS_TARGET = "displacement-globe.pages.dev";
+const ZONE_NAME = "lucasspeciale.com";
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -11,7 +13,7 @@ if (!accountId || !apiToken) {
   );
 }
 
-const apiRoot = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages`;
+const apiRoot = "https://api.cloudflare.com/client/v4";
 
 async function request(path, init = {}) {
   const response = await fetch(`${apiRoot}${path}`, {
@@ -48,7 +50,8 @@ function assertSuccess(result, action) {
 }
 
 async function ensureProject() {
-  const path = `/projects/${encodeURIComponent(PROJECT_NAME)}`;
+  const pagesRoot = `/accounts/${accountId}/pages`;
+  const path = `${pagesRoot}/projects/${encodeURIComponent(PROJECT_NAME)}`;
   const existing = await request(path);
 
   if (existing.response.ok && existing.payload.success) {
@@ -60,7 +63,7 @@ async function ensureProject() {
     assertSuccess(existing, "Reading the Cloudflare Pages project");
   }
 
-  const created = await request("/projects", {
+  const created = await request(`${pagesRoot}/projects`, {
     method: "POST",
     body: JSON.stringify({
       name: PROJECT_NAME,
@@ -73,9 +76,12 @@ async function ensureProject() {
 }
 
 async function ensureCustomDomain() {
+  const pagesRoot = `/accounts/${accountId}/pages`;
   const project = encodeURIComponent(PROJECT_NAME);
   const domain = encodeURIComponent(CUSTOM_DOMAIN);
-  const existing = await request(`/projects/${project}/domains/${domain}`);
+  const existing = await request(
+    `${pagesRoot}/projects/${project}/domains/${domain}`,
+  );
 
   if (existing.response.ok && existing.payload.success) {
     console.log(`Custom domain ${CUSTOM_DOMAIN} is ready.`);
@@ -86,7 +92,7 @@ async function ensureCustomDomain() {
     assertSuccess(existing, "Reading the Cloudflare Pages custom domain");
   }
 
-  const created = await request(`/projects/${project}/domains`, {
+  const created = await request(`${pagesRoot}/projects/${project}/domains`, {
     method: "POST",
     body: JSON.stringify({ name: CUSTOM_DOMAIN }),
   });
@@ -95,5 +101,56 @@ async function ensureCustomDomain() {
   console.log(`Added custom domain ${CUSTOM_DOMAIN}.`);
 }
 
+async function ensureDnsRecord() {
+  const zones = await request(
+    `/zones?name=${encodeURIComponent(ZONE_NAME)}&status=active`,
+  );
+  assertSuccess(zones, `Finding the ${ZONE_NAME} Cloudflare zone`);
+
+  const zone = zones.payload.result?.find((item) => item.name === ZONE_NAME);
+
+  if (!zone) {
+    throw new Error(`The active ${ZONE_NAME} Cloudflare zone was not found.`);
+  }
+
+  const recordsPath = `/zones/${zone.id}/dns_records`;
+  const records = await request(
+    `${recordsPath}?name=${encodeURIComponent(CUSTOM_DOMAIN)}`,
+  );
+  assertSuccess(records, `Reading the ${CUSTOM_DOMAIN} DNS record`);
+
+  const existing = records.payload.result?.[0];
+
+  if (existing) {
+    if (
+      existing.type !== "CNAME" ||
+      existing.content !== DNS_TARGET ||
+      existing.proxied !== true
+    ) {
+      throw new Error(
+        `The existing ${CUSTOM_DOMAIN} DNS record has unexpected settings; refusing to overwrite it.`,
+      );
+    }
+
+    console.log(`DNS record ${CUSTOM_DOMAIN} is ready.`);
+    return;
+  }
+
+  const created = await request(recordsPath, {
+    method: "POST",
+    body: JSON.stringify({
+      type: "CNAME",
+      name: CUSTOM_DOMAIN,
+      content: DNS_TARGET,
+      proxied: true,
+      ttl: 1,
+    }),
+  });
+
+  assertSuccess(created, `Creating the ${CUSTOM_DOMAIN} DNS record`);
+  console.log(`Created DNS record ${CUSTOM_DOMAIN}.`);
+}
+
 await ensureProject();
 await ensureCustomDomain();
+await ensureDnsRecord();
