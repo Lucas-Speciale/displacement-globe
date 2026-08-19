@@ -58,10 +58,10 @@ describe("flow selection", () => {
       [1, 25],
     ]);
     expect(interpolateRoutes(data, next, 0.5, null, "outbound", 10, 10)).toEqual([
-      { origin: 0, destination: 1, value: 20 },
-      { origin: 3, destination: 2, value: 20 },
-      { origin: 0, destination: 2, value: 10 },
-      { origin: 3, destination: 1, value: 5 },
+      { origin: 0, destination: 1, value: 20, visibility: 1 },
+      { origin: 3, destination: 2, value: 20, visibility: 0.5 },
+      { origin: 0, destination: 2, value: 10, visibility: 0.5 },
+      { origin: 3, destination: 1, value: 5, visibility: 0.5 },
     ]);
   });
 });

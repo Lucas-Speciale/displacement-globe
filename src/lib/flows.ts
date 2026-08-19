@@ -17,11 +17,16 @@ export function selectRoutes(
     : data.routes
         .filter((route) => route[direction === "outbound" ? 0 : 1] === selectedCountry)
         .slice(0, focusLimit);
-  return routes.map(([origin, destination, value]) => ({ origin, destination, value }));
+  return routes.map(([origin, destination, value]) => ({ origin, destination, value, visibility: 1 }));
 }
 
 function interpolateValue(start: number, end: number, progress: number): number {
   return start + (end - start) * Math.max(0, Math.min(1, progress));
+}
+
+function smoothstep(progress: number): number {
+  const clamped = Math.max(0, Math.min(1, progress));
+  return clamped * clamped * (3 - 2 * clamped);
 }
 
 export function interpolateTotals(
@@ -72,15 +77,29 @@ export function interpolateRoutes(
     values.set(`${origin}:${destination}`, current);
   });
   const limit = selectedCountry === null ? globalLimit : focusLimit;
+  const fadeBuffer = Math.max(8, Math.ceil(limit * 0.35));
+  const renderLimit = limit + fadeBuffer;
+  const clampedProgress = Math.max(0, Math.min(1, progress));
   return [...values.values()]
     .map(([origin, destination, startValue, endValue]) => ({
       origin,
       destination,
       value: interpolateValue(startValue, endValue, progress),
+      visibility: startValue <= 0
+        ? smoothstep(clampedProgress)
+        : endValue <= 0
+          ? smoothstep(1 - clampedProgress)
+          : 1,
     }))
-    .filter((route) => route.value > 0.01)
     .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
+    .slice(0, renderLimit)
+    .map((route, index) => ({
+      ...route,
+      visibility: route.visibility * (index < limit
+        ? 1
+        : 1 - (index - limit + 1) / (fadeBuffer + 1)),
+    }))
+    .filter((route) => route.visibility > 0.01 && route.value > 0.01);
 }
 
 export function interpolateGlobal(start: number, end: number, progress: number): number {

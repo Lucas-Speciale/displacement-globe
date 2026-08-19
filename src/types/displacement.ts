@@ -54,4 +54,5 @@ export interface RouteView {
   origin: number;
   destination: number;
   value: number;
+  visibility: number;
 }

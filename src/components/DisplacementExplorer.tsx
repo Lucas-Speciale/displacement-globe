@@ -94,6 +94,8 @@ export function DisplacementExplorer() {
   const [labelDensity, setLabelDensity] = useState<MapLabelDensity>("essential");
   const [selectedRoute, setSelectedRoute] = useState<RouteView | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [titlePulseSeen, setTitlePulseSeen] = useState(false);
+  const [titlePulseActive, setTitlePulseActive] = useState(false);
   const cacheRef = useRef(new Map<string, Promise<YearModeData>>());
   const timeRef = useRef(time);
 
@@ -107,6 +109,7 @@ export function DisplacementExplorer() {
       .then(([manifest, countryIndex, geometry]) => {
         setAppData({ manifest, countryIndex, geometry });
         setTime(manifest.years[0]);
+        setTitlePulseSeen(window.localStorage.getItem("displacement-title-pulse-seen") === "1");
         if (window.localStorage.getItem("displacement-guide-seen") !== "1") setGuideOpen(true);
       })
       .catch((loadError) => {
@@ -245,6 +248,11 @@ export function DisplacementExplorer() {
 
   const closeGuide = () => {
     window.localStorage.setItem("displacement-guide-seen", "1");
+    if (!titlePulseSeen) {
+      window.localStorage.setItem("displacement-title-pulse-seen", "1");
+      setTitlePulseSeen(true);
+      setTitlePulseActive(true);
+    }
     setGuideOpen(false);
   };
 
@@ -258,6 +266,7 @@ export function DisplacementExplorer() {
         columns={columns}
         labelDensity={labelDensity}
         selectedCountry={selectedCountry}
+        hasSelectedRoute={selectedRoute !== null}
         onCountrySelect={(country) => {
           setPlaying(false);
           setSelectedCountry(country);
@@ -269,9 +278,17 @@ export function DisplacementExplorer() {
         }}
       />
 
-      <header className="brand-overlay">
+      <header
+        className={`brand-overlay ${titlePulseActive ? "title-route-pulse" : titlePulseSeen ? "title-route-settled" : "title-route-waiting"}`}
+        onAnimationEnd={(event) => {
+          if (event.animationName === "title-route-pulse") setTitlePulseActive(false);
+        }}
+      >
         <p className="eyebrow">The forced displacement study</p>
-        <h1>Displacement<br /><em>Globe</em></h1>
+        <h1>
+          <span>Displacement</span>
+          <span className="title-second-line"><i aria-hidden="true" /><em>Globe</em></span>
+        </h1>
         <p>{copy.headline}</p>
       </header>
 

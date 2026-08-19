@@ -8,7 +8,7 @@ import * as maplibregl from "maplibre-gl";
 import type { FilterSpecification, Map as MapLibreMap, MapGeoJSONFeature } from "maplibre-gl";
 
 import { columnElevation, routeAlpha, routeWidth } from "@/lib/flows";
-import { interpolateArcPosition } from "@/lib/globe";
+import { interpolateArcPosition, routePhaseOffset, wrapLongitude } from "@/lib/globe";
 import type {
   CountryGeometry,
   CountryMeta,
@@ -65,6 +65,7 @@ interface DisplacementGlobeProps {
   routes: RouteView[];
   columns: TotalTuple[];
   selectedCountry: number | null;
+  hasSelectedRoute: boolean;
   onCountrySelect: (country: number) => void;
   onRouteSelect: (route: RouteView) => void;
 }
@@ -102,6 +103,7 @@ export function DisplacementGlobe({
   routes,
   columns,
   selectedCountry,
+  hasSelectedRoute,
   onCountrySelect,
   onRouteSelect,
 }: DisplacementGlobeProps) {
@@ -115,6 +117,11 @@ export function DisplacementGlobe({
   const modeRef = useRef(mode);
   const onCountrySelectRef = useRef(onCountrySelect);
   const onRouteSelectRef = useRef(onRouteSelect);
+  const selectedCountryRef = useRef(selectedCountry);
+  const hasSelectedRouteRef = useRef(hasSelectedRoute);
+  const registerInteractionRef = useRef(() => {});
+  const hasInteractedRef = useRef(false);
+  const lastInteractionRef = useRef(0);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   useEffect(() => { routesRef.current = routes; }, [routes]);
@@ -122,6 +129,8 @@ export function DisplacementGlobe({
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { onCountrySelectRef.current = onCountrySelect; }, [onCountrySelect]);
   useEffect(() => { onRouteSelectRef.current = onRouteSelect; }, [onRouteSelect]);
+  useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
+  useEffect(() => { hasSelectedRouteRef.current = hasSelectedRoute; }, [hasSelectedRoute]);
 
   const makeLayers = useCallback((pulseTime: number): Layer[] => {
     const activeRoutes = routesRef.current;
@@ -138,8 +147,14 @@ export function DisplacementGlobe({
       greatCircle: true,
       getSourcePosition: (route) => countries[route.origin]?.center ?? [0, 0],
       getTargetPosition: (route) => countries[route.destination]?.center ?? [0, 0],
-      getSourceColor: (route) => [...colors.source, routeAlpha(route.value, maximum)] as [number, number, number, number],
-      getTargetColor: (route) => [...colors.target, routeAlpha(route.value, maximum)] as [number, number, number, number],
+      getSourceColor: (route) => [
+        ...colors.source,
+        Math.round(routeAlpha(route.value, maximum) * route.visibility),
+      ] as [number, number, number, number],
+      getTargetColor: (route) => [
+        ...colors.target,
+        Math.round(routeAlpha(route.value, maximum) * route.visibility),
+      ] as [number, number, number, number],
       getWidth: (route) => routeWidth(route.value, maximum),
       widthUnits: "pixels",
       widthMinPixels: 0.55,
@@ -148,7 +163,10 @@ export function DisplacementGlobe({
       opacity: activeMode === "hosted" ? 0.82 : 0.72,
       parameters: { cullMode: "none" },
       onClick: (info: PickingInfo<RouteView>) => {
-        if (info.object) onRouteSelectRef.current(info.object);
+        if (info.object) {
+          registerInteractionRef.current();
+          onRouteSelectRef.current(info.object);
+        }
       },
     });
 
@@ -187,9 +205,9 @@ export function DisplacementGlobe({
     }
 
     if (activeRoutes.length > 0) {
-      const particles = activeRoutes.map((route, index) => {
+      const particles = activeRoutes.map((route) => {
         const duration = activeMode === "hosted" ? 6800 : 4200;
-        const progress = (pulseTime / duration + index * 0.173) % 1;
+        const progress = (pulseTime / duration + routePhaseOffset(route.origin, route.destination)) % 1;
         return {
           position: interpolateArcPosition(
             countries[route.origin]?.center ?? [0, 0],
@@ -198,9 +216,10 @@ export function DisplacementGlobe({
             arcHeight,
           ),
           value: route.value,
+          visibility: route.visibility,
         };
       });
-      layers.push(new ScatterplotLayer<{ position: [number, number, number]; value: number }>({
+      layers.push(new ScatterplotLayer<{ position: [number, number, number]; value: number; visibility: number }>({
         id: `flow-particles-${activeMode}`,
         data: particles,
         pickable: false,
@@ -209,9 +228,12 @@ export function DisplacementGlobe({
         getRadius: (particle) => (activeMode === "hosted" ? 1.2 : 1.6) + Math.sqrt(particle.value / maximum) * 2.4,
         radiusMinPixels: activeMode === "hosted" ? 1.2 : 1.5,
         radiusMaxPixels: 4,
-        getFillColor: [...colors.target, activeMode === "hosted" ? 190 : 235],
+        getFillColor: (particle) => [
+          ...colors.target,
+          Math.round((activeMode === "hosted" ? 190 : 235) * particle.visibility),
+        ],
         stroked: true,
-        getLineColor: [255, 253, 247, 190],
+        getLineColor: (particle) => [255, 253, 247, Math.round(190 * particle.visibility)],
         lineWidthMinPixels: 0.5,
       }));
     }
@@ -220,6 +242,13 @@ export function DisplacementGlobe({
 
   useEffect(() => {
     if (!frameRef.current || mapRef.current) return;
+    let rotationFrame = 0;
+    let previousRotationFrame = performance.now();
+    const registerInteraction = () => {
+      hasInteractedRef.current = true;
+      lastInteractionRef.current = performance.now();
+    };
+    registerInteractionRef.current = registerInteraction;
     maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
     const map = new maplibregl.Map({
       container: frameRef.current,
@@ -236,6 +265,10 @@ export function DisplacementGlobe({
     });
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     mapRef.current = map;
+    map.on("dragstart", registerInteraction);
+    map.on("rotatestart", registerInteraction);
+    map.on("zoomstart", registerInteraction);
+    map.on("pitchstart", registerInteraction);
 
     map.on("style.load", () => {
       map.setProjection({ type: "globe" });
@@ -299,6 +332,24 @@ export function DisplacementGlobe({
       });
       map.addControl(overlay);
       overlayRef.current = overlay;
+
+      const rotateGlobe = (now: number) => {
+        const elapsed = Math.min(now - previousRotationFrame, 80);
+        previousRotationFrame = now;
+        const idle = !hasInteractedRef.current || now - lastInteractionRef.current >= 10_000;
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (
+          idle
+          && selectedCountryRef.current === null
+          && !hasSelectedRouteRef.current
+          && !reduceMotion
+        ) {
+          const center = map.getCenter();
+          map.setCenter([wrapLongitude(center.lng + elapsed * 0.0015), center.lat]);
+        }
+        rotationFrame = requestAnimationFrame(rotateGlobe);
+      };
+      rotationFrame = requestAnimationFrame(rotateGlobe);
     });
 
     map.on("mousemove", COUNTRY_FILL, (event) => {
@@ -317,10 +368,15 @@ export function DisplacementGlobe({
     map.on("click", COUNTRY_FILL, (event) => {
       const iso3 = featureIso3(event.features?.[0]);
       const country = iso3 ? indexByIso3.get(iso3) : undefined;
-      if (country !== undefined) onCountrySelectRef.current(country);
+      if (country !== undefined) {
+        registerInteraction();
+        onCountrySelectRef.current(country);
+      }
     });
 
     return () => {
+      cancelAnimationFrame(rotationFrame);
+      registerInteractionRef.current = () => {};
       overlayRef.current?.finalize();
       overlayRef.current = null;
       map.remove();

@@ -1,5 +1,14 @@
 const EARTH_RADIUS_METERS = 6_371_008.8;
 
+export function routePhaseOffset(origin: number, destination: number): number {
+  const hash = Math.imul(origin + 1, 73_856_093) ^ Math.imul(destination + 1, 19_349_663);
+  return (hash >>> 0) / 4_294_967_296;
+}
+
+export function wrapLongitude(longitude: number): number {
+  return ((longitude + 180) % 360 + 360) % 360 - 180;
+}
+
 export function interpolateArcPosition(
   source: [number, number],
   target: [number, number],
