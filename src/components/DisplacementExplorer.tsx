@@ -83,6 +83,9 @@ async function loadJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 }
 
 export function DisplacementExplorer() {
+  const [showcase] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("showcase") === "1",
+  );
   const [appData, setAppData] = useState<AppData | null>(null);
   const [loadedMode, setLoadedMode] = useState<LoadedModeData | null>(null);
   const [mode, setMode] = useState<DataMode>("hosted");
@@ -109,16 +112,16 @@ export function DisplacementExplorer() {
     ])
       .then(([manifest, countryIndex, geometry]) => {
         setAppData({ manifest, countryIndex, geometry });
-        setTime(manifest.years[0]);
+        setTime(showcase ? manifest.years.at(-1)! : manifest.years[0]);
         setTitlePulseSeen(window.localStorage.getItem("displacement-title-pulse-seen") === "1");
-        if (window.localStorage.getItem("displacement-guide-seen") !== "1") setGuideOpen(true);
+        if (!showcase && window.localStorage.getItem("displacement-guide-seen") !== "1") setGuideOpen(true);
       })
       .catch((loadError) => {
         if (loadError instanceof DOMException && loadError.name === "AbortError") return;
         setError(loadError instanceof Error ? loadError.message : "The globe could not load.");
       });
     return () => controller.abort();
-  }, []);
+  }, [showcase]);
 
   const loadPartition = useCallback((targetYear: number, targetMode: DataMode): Promise<YearModeData> => {
     const key = `${targetYear}-${targetMode}`;
@@ -259,8 +262,9 @@ export function DisplacementExplorer() {
   };
 
   return (
-    <main className={`displacement-app mode-${mode}`}>
+    <main className={`displacement-app mode-${mode}${showcase ? " showcase-mode" : ""}`}>
       <DisplacementGlobe
+        showcase={showcase}
         geometry={appData.geometry}
         countries={appData.countryIndex.countries}
         mode={mode}

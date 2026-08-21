@@ -25,6 +25,8 @@ const COUNTRY_FILL = "displacement-country-fill";
 const COUNTRY_OUTLINE = "displacement-country-outline";
 const COUNTRY_SELECTED = "displacement-country-selected";
 const COUNTRY_HOVER = "displacement-country-hover";
+const SHOWCASE_START_CENTER: [number, number] = [-95, 20];
+const SHOWCASE_ZOOM = 1.85;
 const GLOBE_MASK_CELLS: Array<Array<[number, number]>> = Array.from({ length: 36 }, (_, latitudeIndex) => {
   const south = -90 + latitudeIndex * 5;
   return Array.from({ length: 72 }, (_, longitudeIndex) => {
@@ -58,6 +60,7 @@ interface MapLabelLayer {
 }
 
 interface DisplacementGlobeProps {
+  showcase?: boolean;
   geometry: CountryGeometry;
   countries: CountryMeta[];
   mode: DataMode;
@@ -96,6 +99,7 @@ function applyLabelDensity(map: MapLibreMap, layers: MapLabelLayer[], density: M
 }
 
 export function DisplacementGlobe({
+  showcase = false,
   geometry,
   countries,
   mode,
@@ -122,6 +126,9 @@ export function DisplacementGlobe({
   const registerInteractionRef = useRef(() => {});
   const hasInteractedRef = useRef(false);
   const lastInteractionRef = useRef(0);
+  const showcaseReadyRef = useRef(false);
+  const showcaseStartRequestedRef = useRef(false);
+  const showcaseStartedAtRef = useRef<number | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   useEffect(() => { routesRef.current = routes; }, [routes]);
@@ -131,6 +138,33 @@ export function DisplacementGlobe({
   useEffect(() => { onRouteSelectRef.current = onRouteSelect; }, [onRouteSelect]);
   useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
   useEffect(() => { hasSelectedRouteRef.current = hasSelectedRoute; }, [hasSelectedRoute]);
+
+  useEffect(() => {
+    if (!showcase) return;
+    const requestStart = () => {
+      showcaseStartRequestedRef.current = true;
+      if (showcaseReadyRef.current && showcaseStartedAtRef.current === null) {
+        showcaseStartedAtRef.current = performance.now();
+      }
+    };
+    const startShowcase = (event: MessageEvent) => {
+      if (
+        event.source === window.parent
+        && event.data?.type === "showcase-start"
+        && event.data.app === "displacement-globe"
+      ) {
+        requestStart();
+      }
+    };
+    if (window.parent === window) requestStart();
+    window.addEventListener("message", startShowcase);
+    return () => {
+      window.removeEventListener("message", startShowcase);
+      showcaseReadyRef.current = false;
+      showcaseStartRequestedRef.current = false;
+      showcaseStartedAtRef.current = null;
+    };
+  }, [showcase]);
 
   const makeLayers = useCallback((pulseTime: number): Layer[] => {
     const activeRoutes = routesRef.current;
@@ -243,6 +277,7 @@ export function DisplacementGlobe({
   useEffect(() => {
     if (!frameRef.current || mapRef.current) return;
     let rotationFrame = 0;
+    let showcaseReadyTimer = 0;
     let previousRotationFrame = performance.now();
     const registerInteraction = () => {
       hasInteractedRef.current = true;
@@ -253,8 +288,8 @@ export function DisplacementGlobe({
     const map = new maplibregl.Map({
       container: frameRef.current,
       style: MAP_STYLE,
-      center: [8, 18],
-      zoom: 1.25,
+      center: showcase ? SHOWCASE_START_CENTER : [8, 18],
+      zoom: showcase ? SHOWCASE_ZOOM : 1.25,
       minZoom: 0.65,
       maxZoom: 6,
       pitch: 0,
@@ -333,6 +368,20 @@ export function DisplacementGlobe({
       map.addControl(overlay);
       overlayRef.current = overlay;
 
+      if (showcase) {
+        map.once("idle", () => {
+          map.jumpTo({ center: SHOWCASE_START_CENTER, zoom: SHOWCASE_ZOOM, pitch: 0, bearing: 0 });
+          showcaseReadyTimer = window.setTimeout(() => {
+            showcaseReadyRef.current = true;
+            if (window.parent === window || showcaseStartRequestedRef.current) {
+              showcaseStartedAtRef.current = performance.now();
+            } else {
+              window.parent.postMessage({ type: "showcase-ready", app: "displacement-globe" }, "*");
+            }
+          }, 250);
+        });
+      }
+
       const rotateGlobe = (now: number) => {
         const elapsed = Math.min(now - previousRotationFrame, 80);
         previousRotationFrame = now;
@@ -344,8 +393,17 @@ export function DisplacementGlobe({
           && !hasSelectedRouteRef.current
           && !reduceMotion
         ) {
-          const center = map.getCenter();
-          map.setCenter([wrapLongitude(center.lng + elapsed * 0.0015), center.lat]);
+          if (showcase) {
+            const showcaseStartedAt = showcaseStartedAtRef.current;
+            if (showcaseStartedAt !== null && now >= showcaseStartedAt) {
+              const phase = ((now - showcaseStartedAt) % 48_000) / 48_000;
+              const traversal = (1 - Math.cos(phase * Math.PI * 2)) / 2;
+              map.setCenter([SHOWCASE_START_CENTER[0] + traversal * 195, SHOWCASE_START_CENTER[1]]);
+            }
+          } else {
+            const center = map.getCenter();
+            map.setCenter([wrapLongitude(center.lng + elapsed * 0.0015), center.lat]);
+          }
         }
         rotationFrame = requestAnimationFrame(rotateGlobe);
       };
@@ -376,13 +434,14 @@ export function DisplacementGlobe({
 
     return () => {
       cancelAnimationFrame(rotationFrame);
+      window.clearTimeout(showcaseReadyTimer);
       registerInteractionRef.current = () => {};
       overlayRef.current?.finalize();
       overlayRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, [geometry, indexByIso3, makeLayers]);
+  }, [geometry, indexByIso3, makeLayers, showcase]);
 
   useEffect(() => {
     const iso3 = selectedCountry === null ? "" : countries[selectedCountry]?.iso3 ?? "";

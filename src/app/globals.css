@@ -101,6 +101,22 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .maplibregl-ctrl-attrib a { color: var(--muted); }
 
+.showcase-mode .brand-overlay,
+.showcase-mode .year-overlay,
+.showcase-mode .control-stack,
+.showcase-mode .country-focus,
+.showcase-mode .route-readout,
+.showcase-mode .global-readout,
+.showcase-mode .map-legend,
+.showcase-mode .timeline-shell,
+.showcase-mode .guide-backdrop,
+.showcase-mode .maplibregl-ctrl-attrib,
+.showcase-mode .maplibregl-ctrl-logo {
+  display: none;
+}
+
+.showcase-mode .maplibregl-canvas { cursor: default; }
+
 .brand-overlay,
 .year-overlay,
 .control-stack,
