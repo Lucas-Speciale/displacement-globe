@@ -126,8 +126,6 @@ export function DisplacementGlobe({
   const registerInteractionRef = useRef(() => {});
   const hasInteractedRef = useRef(false);
   const lastInteractionRef = useRef(0);
-  const showcaseReadyRef = useRef(false);
-  const showcaseStartRequestedRef = useRef(false);
   const showcaseStartedAtRef = useRef<number | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
@@ -138,33 +136,6 @@ export function DisplacementGlobe({
   useEffect(() => { onRouteSelectRef.current = onRouteSelect; }, [onRouteSelect]);
   useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
   useEffect(() => { hasSelectedRouteRef.current = hasSelectedRoute; }, [hasSelectedRoute]);
-
-  useEffect(() => {
-    if (!showcase) return;
-    const requestStart = () => {
-      showcaseStartRequestedRef.current = true;
-      if (showcaseReadyRef.current && showcaseStartedAtRef.current === null) {
-        showcaseStartedAtRef.current = performance.now();
-      }
-    };
-    const startShowcase = (event: MessageEvent) => {
-      if (
-        event.source === window.parent
-        && event.data?.type === "showcase-start"
-        && event.data.app === "displacement-globe"
-      ) {
-        requestStart();
-      }
-    };
-    if (window.parent === window) requestStart();
-    window.addEventListener("message", startShowcase);
-    return () => {
-      window.removeEventListener("message", startShowcase);
-      showcaseReadyRef.current = false;
-      showcaseStartRequestedRef.current = false;
-      showcaseStartedAtRef.current = null;
-    };
-  }, [showcase]);
 
   const makeLayers = useCallback((pulseTime: number): Layer[] => {
     const activeRoutes = routesRef.current;
@@ -372,12 +343,7 @@ export function DisplacementGlobe({
         map.once("idle", () => {
           map.jumpTo({ center: SHOWCASE_START_CENTER, zoom: SHOWCASE_ZOOM, pitch: 0, bearing: 0 });
           showcaseReadyTimer = window.setTimeout(() => {
-            showcaseReadyRef.current = true;
-            if (window.parent === window || showcaseStartRequestedRef.current) {
-              showcaseStartedAtRef.current = performance.now();
-            } else {
-              window.parent.postMessage({ type: "showcase-ready", app: "displacement-globe" }, "*");
-            }
+            showcaseStartedAtRef.current = performance.now();
           }, 250);
         });
       }
@@ -440,6 +406,7 @@ export function DisplacementGlobe({
       overlayRef.current = null;
       map.remove();
       mapRef.current = null;
+      showcaseStartedAtRef.current = null;
     };
   }, [geometry, indexByIso3, makeLayers, showcase]);
 
