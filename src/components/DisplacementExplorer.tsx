@@ -82,6 +82,22 @@ async function loadJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function readStorageFlag(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeStorageFlag(key: string): void {
+  try {
+    window.localStorage.setItem(key, "1");
+  } catch {
+    // The interface remains usable when browser storage is unavailable.
+  }
+}
+
 export function DisplacementExplorer() {
   const [showcase] = useState(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("showcase") === "1",
@@ -113,8 +129,8 @@ export function DisplacementExplorer() {
       .then(([manifest, countryIndex, geometry]) => {
         setAppData({ manifest, countryIndex, geometry });
         setTime(showcase ? manifest.years.at(-1)! : manifest.years[0]);
-        setTitlePulseSeen(window.localStorage.getItem("displacement-title-pulse-seen") === "1");
-        if (!showcase && window.localStorage.getItem("displacement-guide-seen") !== "1") setGuideOpen(true);
+        setTitlePulseSeen(readStorageFlag("displacement-title-pulse-seen"));
+        if (!showcase && !readStorageFlag("displacement-guide-seen")) setGuideOpen(true);
       })
       .catch((loadError) => {
         if (loadError instanceof DOMException && loadError.name === "AbortError") return;
@@ -251,9 +267,9 @@ export function DisplacementExplorer() {
     : null;
 
   const closeGuide = () => {
-    window.localStorage.setItem("displacement-guide-seen", "1");
+    writeStorageFlag("displacement-guide-seen");
     if (!titlePulseSeen) {
-      window.localStorage.setItem("displacement-title-pulse-seen", "1");
+      writeStorageFlag("displacement-title-pulse-seen");
       setTitlePulseSeen(true);
       setTitlePulseActive(true);
     }
